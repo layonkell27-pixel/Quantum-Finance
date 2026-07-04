@@ -1,0 +1,6 @@
+{
+  "name": "QuantumFinance",
+  "description": "Dashboard financeiro de elite com design Glassmorphism, projeção de fim de ano e controle de recorrência.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
