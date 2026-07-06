@@ -73,21 +73,30 @@ function AdminControlDashboard({ onLogout, onToggleView }: AdminControlDashboard
   });
 
   const fetchUserList = async () => {
-  const ADMIN_EMAIL = 'layonkell43@gmail.com';
-  if (!ADMIN_EMAIL || ADMIN_EMAIL === "undefined") return;
-  
-  setIsFetchingList(true);
+    const ADMIN_EMAIL = 'layonkell43@gmail.com';
+    if (!ADMIN_EMAIL || ADMIN_EMAIL === "undefined") return;
+    
+    setIsFetchingList(true);
 
     try {
       let data: any = null;
       try {
-        const response = await fetch(`${GOOGLE_SCRIPT_URL}?email=${encodeURIComponent(ADMIN_EMAIL)}&listar=true`, { redirect: "follow" });
-        data = await response.json();
+        const response = await fetch(`${GOOGLE_SCRIPT_URL}?listar=true`);
+        const text = await response.text();
+        
+        if (text.trim().startsWith('{') || text.trim().startsWith('[')) {
+          data = JSON.parse(text);
+        }
       } catch (innerError) {
         console.error("Fetch failed:", innerError);
       }
 
       let parsedUsers: AdminUser[] = [];
+
+      // Normaliza caso o back-end retorne { success: true, users: [...] }
+      if (data && data.users && Array.isArray(data.users)) {
+        data = data.users;
+      }
 
       if (data && Array.isArray(data)) {
         const formatted = data.map((row: any) => ({
@@ -161,7 +170,12 @@ function AdminControlDashboard({ onLogout, onToggleView }: AdminControlDashboard
     } else if (actionLower === 'remover' || actionLower === 'delete') {
       scriptAction = 'delete';
     }
-    await fetch(`${GOOGLE_SCRIPT_URL}?email=${encodeURIComponent(targetEmail)}&action=${scriptAction}`, { redirect: "follow" });
+    
+    await fetch(GOOGLE_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: scriptAction, email: targetEmail })
+    });
   };
 
   const handleRowAction = async (targetEmail: string, action: 'aprovar' | 'rejeitar' | 'remover') => {
@@ -172,7 +186,11 @@ function AdminControlDashboard({ onLogout, onToggleView }: AdminControlDashboard
       else if (action === 'remover') scriptAction = 'delete';
       else if (action === 'aprovar') scriptAction = 'approve';
 
-      await fetch(`${GOOGLE_SCRIPT_URL}?email=${encodeURIComponent(targetEmail)}&action=${scriptAction}`, { redirect: "follow" });
+      await fetch(GOOGLE_SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: scriptAction, email: targetEmail })
+      });
       
       setStatusMessage({ text: `Sucesso! Operação ${action} enviada para ${targetEmail}.`, type: 'success' });
       await fetchUserList(); // Atualiza via rede apenas após o clique físico
@@ -1057,28 +1075,31 @@ export default function App() {
 
   const [isInitialSyncComplete, setIsInitialSyncComplete] = useState(false);
 
-  // REDE BLINDADA: GET ÚNICO ISOLADO
+  // REDE BLINDADA: GET ÚNICO ISOLADO COM PARSE SEGURO
   const loadDataFromCloud = useCallback(async (email: string) => {
       if (!email || email.trim() === "" || email === "undefined") return;
 
     try {
       const response = await fetch(`${GOOGLE_SCRIPT_URL}?email=${encodeURIComponent(email)}`, { redirect: "follow" });
       if (response.ok) {
-        const responseText = await response.text();
-        const data = JSON.parse(responseText);
-        if (data) {
-          if (data.transactions && Array.isArray(data.transactions)) {
-            setTransactions(data.transactions);
-            localStorage.setItem('quantum_finance_v2_pt', JSON.stringify(data.transactions));
-          }
-          if (data.goals && Array.isArray(data.goals)) {
-            setGoals(data.goals);
-            localStorage.setItem('quantum_goals', JSON.stringify(data.goals));
-            localStorage.setItem('quantum_metas', JSON.stringify(data.goals));
-          } else if (data.metas && Array.isArray(data.metas)) {
-            setGoals(data.metas);
-            localStorage.setItem('quantum_goals', JSON.stringify(data.metas));
-            localStorage.setItem('quantum_metas', JSON.stringify(data.metas));
+        const text = await response.text();
+        
+        if (text.trim().startsWith('{')) {
+          const data = JSON.parse(text);
+          if (data) {
+            if (data.transactions && Array.isArray(data.transactions)) {
+              setTransactions(data.transactions);
+              localStorage.setItem('quantum_finance_v2_pt', JSON.stringify(data.transactions));
+            }
+            if (data.goals && Array.isArray(data.goals)) {
+              setGoals(data.goals);
+              localStorage.setItem('quantum_goals', JSON.stringify(data.goals));
+              localStorage.setItem('quantum_metas', JSON.stringify(data.goals));
+            } else if (data.metas && Array.isArray(data.metas)) {
+              setGoals(data.metas);
+              localStorage.setItem('quantum_goals', JSON.stringify(data.metas));
+              localStorage.setItem('quantum_metas', JSON.stringify(data.metas));
+            }
           }
         }
       }
@@ -1089,6 +1110,7 @@ export default function App() {
     }
   }, []);
 
+  // REDE BLINDADA: POST COM TEXT/PLAIN E ENVIO CORRETO DO EMAIL
   const saveToCloud = useCallback(async (actionType: string, payload: { transactions: Transaction[], goals: Goal[] }) => {
     if (!userEmail || userEmail === "undefined") return;
     try {
@@ -1101,15 +1123,13 @@ export default function App() {
       await fetch(GOOGLE_SCRIPT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(bodyPayload),
-        mode: 'no-cors'
+        body: JSON.stringify(bodyPayload)
       });
     } catch (err) {
       console.error("Erro ao salvar dados na nuvem:", err);
     }
   }, [userEmail]);
 
-  // REDE BLINDADA: EVITA LOOP AUTOMÁTICO DE DADOS
   useEffect(() => {
     if (!userEmail || userEmail === "undefined") {
       setIsInitialSyncComplete(true);
@@ -1133,7 +1153,6 @@ export default function App() {
     }
   }, []);
 
-  // REDE BLINDADA: VERIFICADOR DE APROVAÇÃO ISOLADO. PARA DE RODAR APÓS APROVAÇÃO
   useEffect(() => {
     const ADMIN_EMAIL = 'layonkell43@gmail.com';
     if (!userEmail || userEmail === ADMIN_EMAIL || userEmail === "undefined") return;
@@ -1590,7 +1609,6 @@ export default function App() {
     }
   };
 
-  // REDE BLINDADA: Atualiza rede apenas após o clique físico de salvar
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const valorString = String(amount || "0").trim();
