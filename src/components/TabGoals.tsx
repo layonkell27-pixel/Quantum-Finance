@@ -49,15 +49,12 @@ const parseDateSafe = (dateStr: string) => {
   if (dateStr.includes('T')) {
     return new Date(dateStr);
   }
-  // Standardize delimiters
   const cleanStr = dateStr.replace(/\//g, '-');
   const parts = cleanStr.split('-');
   if (parts.length === 3) {
     if (parts[0].length === 4) {
-      // YYYY-MM-DD
       return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
     } else {
-      // DD-MM-YYYY
       return new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
     }
   }
@@ -90,7 +87,6 @@ export default function TabGoals({
   formatCurrency,
   transactions = []
 }: TabGoalsProps) {
-  // Local state to manage which goals have their dopamine boosters revealed
   const [revealedGoals, setRevealedGoals] = useState<Record<number, boolean>>({});
   const [activeSubTab, setActiveSubTab] = useState<Record<number, 'chart' | 'years' | 'months'>>({});
 
@@ -101,7 +97,6 @@ export default function TabGoals({
     }));
   };
 
-  // Helper functions for parsing and formatting
   const cleanPoints = (val: string): string => {
     if (!val) return '';
     if (val.includes(',')) {
@@ -119,7 +114,6 @@ export default function TabGoals({
 
   return (
     <div className="space-y-6" id="tab-goals-content">
-      {/* METRIC CARDS GRID (ONLY PATRIMÔNIO TOTAL & TOTAL METAS) */}
       <section className="grid grid-cols-1 sm:grid-cols-2 gap-4" id="goals-metrics-grid">
         <motion.div
           initial={{ opacity: 0, y: 15 }}
@@ -148,7 +142,6 @@ export default function TabGoals({
         </motion.div>
       </section>
 
-      {/* TWO-COLUMN LAYOUT: GOALS LIST AND GOAL MANAGER */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
           <div className="flex justify-between items-center mb-2">
@@ -179,7 +172,6 @@ export default function TabGoals({
               {goals.map((g) => {
                 const isEditingThisGoal = g.id === editingGoalId;
 
-                // Dynamic inputs parsed as numbers for the goal that is currently being edited
                 const currentAmount = isEditingThisGoal ? (parseFloat(cleanPoints(goalCurrent)) || 0) : g.currentAmount;
                 const targetAmount = isEditingThisGoal ? (parseFloat(cleanPoints(goalTarget)) || 0) : g.targetAmount;
                 const monthlyContribution = isEditingThisGoal ? (parseFloat(cleanPoints(goalContribution)) || 0) : g.monthlyContribution;
@@ -191,7 +183,6 @@ export default function TabGoals({
                 const percentage = targetAmount > 0 ? Math.min(Math.round((currentAmount / targetAmount) * 100), 100) : 0;
                 const remaining = targetAmount - currentAmount;
 
-                // Encontrar investimentos vinculados e calcular o valor inicial real
                 const linkedTxs = (transactions || []).filter(t => {
                   const mId = t.goalId || (t as any).metaId;
                   const isInvestment = t.type === 'Investment' || (t as any).tipo === 'Investimento' || t.type === ('Investimento' as any);
@@ -201,18 +192,15 @@ export default function TabGoals({
                 const totalLinkedContributions = linkedTxs.reduce((sum, t) => sum + Number(t.amount || (t as any).valor || 0), 0);
                 const originalInitialAmount = Math.max(0, currentAmount - totalLinkedContributions);
 
-                // 1. COMPOUND INTEREST AND REAL CALCULATIONS
                 const hasInterest = annualRate > 0;
 
                 let forecastMonths = 0;
-                let simulatedBalance = originalInitialAmount; // Começa rigorosamente com o Valor Inicial no Mês 0
+                let simulatedBalance = originalInitialAmount;
                 let accumulatedInterest = 0;
                 const monthlyRate = hasInterest ? Math.pow(1 + (annualRate / 100), 1 / 12) - 1 : 0;
                 
-                // RENDIMENTO MENSAL INICIAL (FRASE DO GUERREIRO): pegue o Valor Inicial e multiplique pela taxa_mensal
                 const rendimentoMensalAtual = originalInitialAmount * monthlyRate;
                 
-                // Próxima Meta de Rendimento
                 let proximoAlvoRendimento = 100;
                 if (rendimentoMensalAtual > 0) {
                   const nextHundred = Math.ceil(rendimentoMensalAtual / 100) * 100;
@@ -236,17 +224,10 @@ export default function TabGoals({
                   }
                 }
 
-                // Calcule o tempo SEM rendimentos de forma direta: (Valor Alvo - Valor Atual) / Contribuição Mensal, arredondado para cima
                 const simpleMonthsNeeded = monthlyContribution > 0 ? Math.ceil((targetAmount - currentAmount) / monthlyContribution) : 0;
-
-                // A economia real exibida deve ser rigorosamente a subtração simples: (Meses Sem Rendimento - Meses Com Rendimento)
                 const monthsSaved = Math.max(0, simpleMonthsNeeded - forecastMonths);
 
-                // CORREÇÃO DOS CAMPOS "RESTAM ACUMULAR" E "RENDIMENTO ESTIMADO TOTAL"
-                // Restam Acumular deve ser rigorosamente: (Valor Alvo - Valor Inicial)
                 const restamAcumular = targetAmount - originalInitialAmount;
-
-                // Rendimento Estimado Total deve ser rigorosamente o resultado acumulado real desse loop com centavos
                 const totalInterestAccrued = hasInterest && remaining > 0 
                   ? accumulatedInterest 
                   : 0;
@@ -254,8 +235,7 @@ export default function TabGoals({
                 const totalAportes = (hasInterest && remaining > 0 ? forecastMonths : simpleMonthsNeeded) * monthlyContribution;
                 const patrimonioFinalAcumulado = currentAmount + totalAportes + totalInterestAccrued;
 
-                // Compute exact completion date
-                const today = new Date(2026, 5, 24); // Baseline date matching metadata timestamp
+                const today = new Date(2026, 5, 24); 
                 const targetDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
                 if (monthlyContribution > 0 && remaining > 0) {
                   targetDate.setMonth(targetDate.getMonth() + (hasInterest ? forecastMonths : simpleMonthsNeeded));
@@ -267,61 +247,11 @@ export default function TabGoals({
                 });
 
                 const isHighSpeed = monthlyContribution >= 300;
-                // Calcule o próximo alvo arredondando para cima de 100 em 100 reais (ex: 1.3x alvo arredondado de 100 em 100)
                 const nextMilestone = Math.ceil((targetAmount * 1.3) / 100) * 100;
 
-                // Geração dos dados da simulação mês a mês para os gráficos e tabelas
                 const creationDate = g.createdAt ? parseDateSafe(g.createdAt) : (g.id && g.id > 1000000000000 ? new Date(g.id) : new Date(2026, 5, 1));
                 const startYear = creationDate.getFullYear();
                 const startMonth = creationDate.getMonth();
-
-                const now = new Date();
-                const currentYear = now.getFullYear();
-                const currentMonth = now.getMonth();
-
-                const getMonthStatus = (
-                  actualAporteSum: number,
-                  plannedContribution: number
-                ) => {
-                  const porcentagemMes = plannedContribution > 0 ? (actualAporteSum / plannedContribution) * 100 : 0;
-
-                  if (porcentagemMes >= 100) {
-                    const percentStr = porcentagemMes % 1 === 0 ? porcentagemMes.toFixed(0) : porcentagemMes.toFixed(1);
-                    return {
-                      color: '#10b981', // emerald-500
-                      bgClass: 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400',
-                      textClass: 'text-emerald-400',
-                      emoji: '🟢',
-                      label: `Concluído (${percentStr}%)`
-                    };
-                  } else if (porcentagemMes >= 50) {
-                    const percentStr = porcentagemMes % 1 === 0 ? porcentagemMes.toFixed(0) : porcentagemMes.toFixed(1);
-                    return {
-                      color: '#eab308', // yellow-500
-                      bgClass: 'bg-yellow-500/10 border border-yellow-500/30 text-yellow-400',
-                      textClass: 'text-yellow-400',
-                      emoji: '🟡',
-                      label: `Pendente (${percentStr}%)`
-                    };
-                  } else if (porcentagemMes > 0) {
-                    const percentStr = porcentagemMes % 1 === 0 ? porcentagemMes.toFixed(0) : porcentagemMes.toFixed(1);
-                    return {
-                      color: '#ef4444', // red-500
-                      bgClass: 'bg-red-500/10 border border-red-500/30 text-red-400',
-                      textClass: 'text-red-400',
-                      emoji: '🔴',
-                      label: `Em Atraso (${percentStr}%)`
-                    };
-                  } else {
-                    return {
-                      color: '#475569', // slate-600
-                      bgClass: 'bg-slate-800/40 border border-slate-700/30 text-slate-400',
-                      textClass: 'text-slate-400',
-                      emoji: '🔵',
-                      label: 'Projeção'
-                    };
-                  }
-                };
 
                 const simulationSteps: {
                   mes: number;
@@ -344,7 +274,7 @@ export default function TabGoals({
                 }[] = [];
 
                 if (targetAmount > 0) {
-                  let sBalance = originalInitialAmount; // Começa rigorosamente com o Valor Inicial no Mês 0
+                  let sBalance = originalInitialAmount;
                   let sAccInterest = 0;
                   let sAccInvested = originalInitialAmount;
 
@@ -356,9 +286,6 @@ export default function TabGoals({
                     const stepYear = stepDate.getFullYear();
                     const stepMonth = stepDate.getMonth();
                     
-                    const isCurrentMonth = (stepYear === currentYear && stepMonth === currentMonth);
-                    const isPastMonth = (stepYear < currentYear) || (stepYear === currentYear && stepMonth < currentMonth);
-
                     const actualAporteSum = (transactions || [])
                       .filter(t => {
                         const mId = t.goalId || (t as any).metaId;
@@ -369,9 +296,49 @@ export default function TabGoals({
                       })
                       .reduce((sum, t) => sum + Number(t.amount || (t as any).valor || 0), 0);
 
+                    // A MATEMÁTICA DA PORCENTAGEM PURA (SEM TRAVA DE CALENDÁRIO)
+                    const porcentagem = monthlyContribution > 0 ? (actualAporteSum / monthlyContribution) * 100 : 0;
+                    
+                    let status = {
+                      color: '#475569', 
+                      bgClass: 'bg-slate-800/40 border border-slate-700/30 text-slate-400',
+                      textClass: 'text-slate-400',
+                      emoji: '🔵',
+                      label: 'Projeção (0%)'
+                    };
+
+                    if (actualAporteSum > 0) {
+                      const percentStr = porcentagem % 1 === 0 ? porcentagem.toFixed(0) : porcentagem.toFixed(1);
+                      if (porcentagem >= 100) {
+                        status = {
+                          color: '#10b981', 
+                          bgClass: 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400',
+                          textClass: 'text-emerald-400',
+                          emoji: '🟢',
+                          label: `Concluído (${percentStr}%)`
+                        };
+                      } else if (porcentagem >= 50) {
+                        status = {
+                          color: '#eab308', 
+                          bgClass: 'bg-yellow-500/10 border border-yellow-500/30 text-yellow-400',
+                          textClass: 'text-yellow-400',
+                          emoji: '🟡',
+                          label: `Pendente (${percentStr}%)`
+                        };
+                      } else {
+                        status = {
+                          color: '#ef4444', 
+                          bgClass: 'bg-red-500/10 border border-red-500/30 text-red-400',
+                          textClass: 'text-red-400',
+                          emoji: '🔴',
+                          label: `Em Atraso (${percentStr}%)`
+                        };
+                      }
+                    }
+
                     const contributionThisMonth = actualAporteSum > 0 
                       ? actualAporteSum 
-                      : (isPastMonth || isCurrentMonth ? 0 : monthlyContribution);
+                      : monthlyContribution;
 
                     const interest = hasInterest ? sBalance * monthlyRate : 0;
                     
@@ -379,7 +346,6 @@ export default function TabGoals({
                     sAccInvested += contributionThisMonth;
                     sBalance = sBalance + contributionThisMonth + interest;
 
-                    const status = getMonthStatus(actualAporteSum, monthlyContribution);
                     const mesLabelShort = stepDate.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).replace('.', '');
 
                     simulationSteps.push({
@@ -483,12 +449,10 @@ export default function TabGoals({
                       </div>
                     </div>
 
-                    {/* DOPAMINE BOOSTER DISCOVERY SECTION */}
                     <div className="mt-3 pt-2.5 border-t border-slate-800/40">
                       <AnimatePresence mode="wait">
                         {revealedGoals[g.id] ? (
                           !hasInterest ? (
-                            /* CLASSIC PANEL FOR 0% OR EMPTY INTEREST */
                             <motion.div
                               key="classic-booster"
                               initial={{ opacity: 0, height: 0 }}
@@ -522,7 +486,6 @@ export default function TabGoals({
                               </button>
                             </motion.div>
                           ) : (
-                            /* HIGH FIDELITY QUANTUM PANEL FOR INTEREST > 0% */
                             <motion.div
                               key="revealed-booster"
                               initial={{ opacity: 0, height: 0 }}
@@ -567,7 +530,6 @@ export default function TabGoals({
                                 </div>
                               </div>
 
-                              {/* Seletor de Três Abas */}
                               <div className="flex bg-slate-950/60 p-1 rounded-lg border border-slate-800/80 gap-1 mt-3">
                                 <button
                                   type="button"
@@ -607,7 +569,6 @@ export default function TabGoals({
                                 </button>
                               </div>
 
-                              {/* Conteúdo da Aba Ativa */}
                               {currentSubTab === 'chart' && (
                                 <div className="w-full h-[180px] mt-2">
                                   <ResponsiveContainer width="100%" height="100%">
@@ -769,7 +730,6 @@ export default function TabGoals({
         </div>
 
         <div>
-          {/* GOALS FORM CARD */}
           {isGoalFormOpen ? (
             <section className="bg-slate-900/60 backdrop-blur-md border border-slate-800 p-5 rounded-xl shadow-lg relative">
               <div className="flex justify-between items-center mb-4">
